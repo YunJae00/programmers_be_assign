@@ -84,6 +84,8 @@ class ReservationDetailView(GenericAPIView):
     def get_permissions(self):
         if self.request.method == 'GET':
             return [IsAuthenticated(), HasRolePermission(['COMPANY', 'ADMIN'])]
+        if self.request.method == 'PATCH':
+            return [IsAuthenticated(), HasRolePermission(['COMPANY', 'ADMIN'])]
         return [IsAuthenticated()]
 
     def get(self, request, reservation_id):
@@ -98,6 +100,42 @@ class ReservationDetailView(GenericAPIView):
             reservation_qs = manager.retrieve_reservation_by_id(request.user, reservation_id)
 
             response_serializer = self.serializer_class(reservation_qs)
+
+            return Response(
+                data=response_serializer.data,
+                status=status.HTTP_200_OK
+            )
+        except DatabaseError as e:
+            return Response(
+                {"detail": "데이터베이스 처리 중 오류가 발생했습니다."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def patch(self, request, reservation_id):
+        """
+        예약 내용 수정
+        - 어드민: 예약을 확정, 예약 내용 수정
+        - 기업 사용자: 예약 내용 수정
+        """
+        manager = ReservationManager()
+
+        request_serializer = ReservationRequestSerializer(data=request.data, partial=True)
+        request_serializer.is_valid(raise_exception=True)
+
+        try:
+            reservation_qs = manager.retrieve_reservation_by_id(request.user, reservation_id)
+
+            updated_reservation = manager.update_reservation(
+                reservation_qs,
+                request.user,
+                request_serializer.validated_data.get('exam_date'),
+                request_serializer.validated_data.get('start_time'),
+                request_serializer.validated_data.get('end_time'),
+                request_serializer.validated_data.get('attendees'),
+                request_serializer.validated_data.get('status')
+            )
+
+            response_serializer = self.serializer_class(updated_reservation)
 
             return Response(
                 data=response_serializer.data,

@@ -16,3 +16,4 @@ class ReservationRequestSerializer(serializers.Serializer):
     start_time = serializers.TimeField()
     end_time = serializers.TimeField()
     attendees = serializers.IntegerField()
+    status = serializers.CharField(required=False)
