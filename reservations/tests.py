@@ -1,3 +1,97 @@
-from django.test import TestCase
+from datetime import time, timedelta
 
-# Create your tests here.
+from django.urls import reverse
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APITestCase
+
+from reservations.models import Reservation
+from users.models import User
+
+
+class ReservationGetTestCase(APITestCase):
+    def setUp(self):
+        # 기업 사용자
+        self.company_user_1 = User.objects.create(
+            email='company_user_1@test.com',
+            password='testpassword',
+            name='company_user_1',
+            role='COMPANY',
+        )
+        # 어드민
+        self.admin_user_1 = User.objects.create(
+            email='admin_user_1@test.com',
+            password='testpassword',
+            name='admin_user_1',
+            role='ADMIN',
+        )
+
+        self.create_test_reservations(self.company_user_1, 15)
+        self.create_test_reservations(self.admin_user_1, 10)
+
+    def create_test_reservations(self, user, count):
+        """테스트 예약 데이터 생성"""
+        for i in range(count):
+            Reservation.objects.create(
+                company_customer=user,
+                exam_date=timezone.now().date() + timedelta(days=5) + timedelta(days=i % 5),
+                start_time=time(10 + i % 8, 0),
+                end_time=time(12 + i % 8, 0),
+                attendees=100 + i * 10,
+                status="PENDING" if i % 2 == 0 else "CONFIRMED"
+            )
+
+    def test_get_reservations_by_company_user(self):
+        """기업 사용자가 자신의 예약을 조회"""
+        self.client.force_authenticate(user=self.company_user_1)
+        url = reverse('reservations')
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['total'], 15)
+        self.assertEqual(response.data['results'][0].get('company_customer'), self.company_user_1.name)
+
+        # 페이지네이션 이동 확인
+        response = self.client.get(url + '?page=2')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 5)  # 두번째 페이지에 5개 표시
+
+    def test_get_reservations_by_admin_user(self):
+        """어드민 유저가 모든 예약을 조회"""
+        self.client.force_authenticate(user=self.admin_user_1)
+
+        url = reverse('reservations')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['total'], 25)
+
+        # 페이지네이션 이동 확인
+        response = self.client.get(url + '?page=3')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 5)  # 세번째 페이지에 5개 표시
+
+    def test_get_reservations_by_unauthorized_user(self):
+        """인증되지 않은 사용자의 예약 조회 시도"""
+        url = reverse('reservations')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_get_reservations_by_wrong_role_user(self):
+        """잘못된 역할을 가진 사용자의 예약 조회 시도"""
+        self.basic_user_1 = User.objects.create(
+            email='basic_user_1@test.com',
+            password='testpassword',
+            name='basic_user_1',
+            role='BASIC', # 잘못된 역할
+        )
+
+        self.client.force_authenticate(user=self.basic_user_1)
+
+        url = reverse('reservations')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data['detail'], '엑세스 권한이 없습니다.')
