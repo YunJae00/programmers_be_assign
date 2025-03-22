@@ -4,7 +4,8 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
-from reservations.exceptions import ReservationPeriodException, ReservationAttendeesException
+from reservations.exceptions import ReservationPeriodException, ReservationAttendeesException, \
+    ReservationAccessDeniedException, ReservationNotFoundException
 from reservations.models import Reservation
 
 
@@ -18,7 +19,7 @@ class ReservationManager:
             user: 요청 사용자 객체
 
         Returns:
-            reservations: 예약 객체
+            QuerySet[Reservation]: 예약 객체들의 QuerySet
 
         Raises:
         """
@@ -79,3 +80,30 @@ class ReservationManager:
         )
 
         return reservation
+
+    @transaction.atomic
+    def retrieve_reservation_by_id(self, user, reservation_id):
+        """
+        ID로 예약 조회
+
+        Args:
+            user: 요청 사용자 객체
+            reservation_id: 조회할 예약 ID
+
+        Returns:
+            QuerySet[Reservation]: 예약 객체의 QuerySet
+
+        Raises:
+            ReservationNotFoundException: 예약이 존재하지 않는 경우
+            ReservationAccessDeniedException: 사용자가 해당 예약에 접근 권한이 없는 경우
+        """
+        try:
+            # ID로 예약 조회
+            reservation_qs = Reservation.objects.select_related('company_customer').get(id=reservation_id)
+
+            if user.role == 'ADMIN' or (user.role == 'COMPANY' and reservation_qs.company_customer == user):
+                return reservation_qs
+            else:
+                raise ReservationAccessDeniedException()
+        except Reservation.DoesNotExist:
+            raise ReservationNotFoundException()

@@ -76,3 +76,35 @@ class ReservationListView(GenericAPIView):
                 {"detail": "데이터베이스 처리 중 오류가 발생했습니다."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class ReservationDetailView(GenericAPIView):
+    serializer_class = ReservationResponseSerializer
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated(), HasRolePermission(['COMPANY', 'ADMIN'])]
+        return [IsAuthenticated()]
+
+    def get(self, request, reservation_id):
+        """
+        예약 정보 조회
+        - 어드민 유저: 모든 예약 접근 가능
+        - 기업 유저: 자신의 예약만 접근 가능
+        """
+        manager = ReservationManager()
+
+        try:
+            reservation_qs = manager.retrieve_reservation_by_id(request.user, reservation_id)
+
+            response_serializer = self.serializer_class(reservation_qs)
+
+            return Response(
+                data=response_serializer.data,
+                status=status.HTTP_200_OK
+            )
+        except DatabaseError as e:
+            return Response(
+                {"detail": "데이터베이스 처리 중 오류가 발생했습니다."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

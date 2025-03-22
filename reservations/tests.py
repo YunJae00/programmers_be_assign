@@ -253,3 +253,88 @@ class ReservationCreateTestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data['detail'], '동 시간대 최대 5만명 까지 예약할 수 있습니다.')
+
+
+class ReservationDetailGetTestCase(APITestCase):
+    def setUp(self):
+        # 기업 사용자 1
+        self.company_user_1 = User.objects.create(
+            email='company_user_1@test.com',
+            password='testpassword',
+            name='company_user_1',
+            role='COMPANY',
+        )
+        # 기업 사용자 2
+        self.company_user_2 = User.objects.create(
+            email='company_user_2@test.com',
+            password='testpassword',
+            name='company_user_2',
+            role='COMPANY',
+        )
+        # 어드민
+        self.admin_user_1 = User.objects.create(
+            email='admin_user_1@test.com',
+            password='testpassword',
+            name='admin_user_1',
+            role='ADMIN',
+        )
+
+        # 기업 사용자 1의 예약
+        self.reservation_1 = Reservation.objects.create(
+            company_customer=self.company_user_1,
+            exam_date=timezone.now().date() + timedelta(days=5),
+            start_time=time(10, 0),
+            end_time=time(12, 0),
+            attendees=30000,
+        )
+        # 기업 사용자 2의 예약
+        self.reservation_2 = Reservation.objects.create(
+            company_customer=self.company_user_2,
+            exam_date=timezone.now().date() + timedelta(days=5),
+            start_time=time(13, 0),
+            end_time=time(15, 0),
+            attendees=30000,
+        )
+
+    def test_get_reservation_by_id(self):
+        """기업 사용자가 자신의 예약을 조회"""
+        self.client.force_authenticate(user=self.company_user_1)
+        url = reverse('reservation-detail', args=[self.reservation_1.id])
+
+        response = self.client.get(url, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['company_customer'], self.company_user_1.name)
+        self.assertEqual(response.data['exam_date'], self.reservation_1.exam_date.isoformat())
+        self.assertEqual(response.data['start_time'], self.reservation_1.start_time.isoformat())
+        self.assertEqual(response.data['end_time'], self.reservation_1.end_time.isoformat())
+        self.assertEqual(response.data['attendees'], self.reservation_1.attendees)
+        self.assertEqual(response.data['status'], 'PENDING')
+
+    def test_get_reservation_by_unauthorized_user(self):
+        """인증되지 않은 사용자의 예약 조회 시도"""
+        url = reverse('reservation-detail', args=[self.reservation_1.id])
+
+        response = self.client.get(url, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_get_reservation_by_other_user(self):
+        """기업 사용자 1의 예약을 기업 사용자 2가 조회 시도"""
+        self.client.force_authenticate(user=self.company_user_2)
+        url = reverse('reservation-detail', args=[self.reservation_1.id])
+
+        response = self.client.get(url, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data['detail'], '해당 예약에 접근할 권한이 없습니다.')
+
+    def test_get_reservation_not_found(self):
+        """없는 예약 조회 시도"""
+        self.client.force_authenticate(user=self.company_user_1)
+        url = reverse('reservation-detail', args=[9999])
+
+        response = self.client.get(url, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.data['detail'], '해당 예약을 찾을 수 없습니다.')
