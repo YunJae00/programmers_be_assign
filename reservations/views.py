@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from programmers_exam_reservation.utils.paginations import CustomPagination
 from programmers_exam_reservation.utils.permissions import HasRolePermission
 from reservations.managers import ReservationManager
-from reservations.serializers import ReservationResponseSerializer
+from reservations.serializers import ReservationResponseSerializer, ReservationRequestSerializer
 
 
 class ReservationListView(GenericAPIView):
@@ -17,6 +17,8 @@ class ReservationListView(GenericAPIView):
     def get_permissions(self):
         if self.request.method == 'GET':
             return [IsAuthenticated(), HasRolePermission(['COMPANY', 'ADMIN'])]
+        if self.request.method == 'POST':
+            return [IsAuthenticated(), HasRolePermission(['COMPANY'])]
         return [IsAuthenticated()]
 
     def get(self, request):
@@ -37,6 +39,37 @@ class ReservationListView(GenericAPIView):
             return Response(
                 data=self.paginator.get_paginated_data(response_serializer.data),
                 status=status.HTTP_200_OK
+            )
+        except DatabaseError as e:
+            return Response(
+                {"detail": "데이터베이스 처리 중 오류가 발생했습니다."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def post(self, request):
+        """
+        예약 생성
+        - 기업 사용자: 예약 생성
+        """
+        manager = ReservationManager()
+
+        try:
+            request_serializer = ReservationRequestSerializer(data=request.data)
+            request_serializer.is_valid(raise_exception=True)
+
+            created_reservation = manager.create_reservation(
+                request.user,
+                request_serializer.validated_data.get('exam_date'),
+                request_serializer.validated_data.get('start_time'),
+                request_serializer.validated_data.get('end_time'),
+                request_serializer.validated_data.get('attendees'),
+            )
+
+            response_serializer = self.serializer_class(created_reservation)
+
+            return Response(
+                data=response_serializer.data,
+                status=status.HTTP_201_CREATED
             )
         except DatabaseError as e:
             return Response(

@@ -9,3 +9,10 @@ class ReservationResponseSerializer(serializers.Serializer):
     end_time = serializers.TimeField(read_only=True)
     attendees = serializers.IntegerField(read_only=True)
     status = serializers.CharField(read_only=True)
+
+
+class ReservationRequestSerializer(serializers.Serializer):
+    exam_date = serializers.DateField()
+    start_time = serializers.TimeField()
+    end_time = serializers.TimeField()
+    attendees = serializers.IntegerField()

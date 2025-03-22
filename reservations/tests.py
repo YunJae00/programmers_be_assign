@@ -95,3 +95,161 @@ class ReservationGetTestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(response.data['detail'], '엑세스 권한이 없습니다.')
+
+
+class ReservationCreateTestCase(APITestCase):
+    def setUp(self):
+        # 기업 사용자
+        self.company_user_1 = User.objects.create(
+            email='company_user_1@test.com',
+            password='testpassword',
+            name='company_user_1',
+            role='COMPANY',
+        )
+        # 어드민
+        self.admin_user_1 = User.objects.create(
+            email='admin_user_1@test.com',
+            password='testpassword',
+            name='admin_user_1',
+            role='ADMIN',
+        )
+
+    def test_create_reservation_by_company_user(self):
+        """기업 사용자가 예약 생성"""
+        self.client.force_authenticate(user=self.company_user_1)
+        url = reverse('reservations')
+
+        valid_data = {
+            'exam_date': timezone.now().date() + timedelta(days=5),
+            'start_time': time(10, 0),
+            'end_time': time(12, 0),
+            'attendees': 10000,
+        }
+
+        response = self.client.post(url, valid_data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['company_customer'], self.company_user_1.name)
+        self.assertEqual(response.data['exam_date'], valid_data['exam_date'].isoformat())
+        self.assertEqual(response.data['start_time'], valid_data['start_time'].isoformat())
+        self.assertEqual(response.data['end_time'], valid_data['end_time'].isoformat())
+        self.assertEqual(response.data['attendees'], valid_data['attendees'])
+        self.assertEqual(response.data['status'], 'PENDING')
+
+    def test_create_reservation_by_unauthorized_user(self):
+        """인증되지 않은 사용자의 예약 생성 시도"""
+        url = reverse('reservations')
+
+        valid_data = {
+            'exam_date': timezone.now().date() + timedelta(days=5),
+            'start_time': time(10, 0),
+            'end_time': time(12, 0),
+            'attendees': 10000,
+        }
+
+        response = self.client.post(url, valid_data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_create_reservation_by_wrong_role_user(self):
+        """기업 사용자가 아닌 사용자가 예약 생성 시도"""
+        self.client.force_authenticate(user=self.admin_user_1)
+        url = reverse('reservations')
+
+        valid_data = {
+            'exam_date': timezone.now().date() + timedelta(days=5),
+            'start_time': time(10, 0),
+            'end_time': time(12, 0),
+            'attendees': 10000,
+        }
+
+        response = self.client.post(url, valid_data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data['detail'], '엑세스 권한이 없습니다.')
+
+    def test_post_reservation_with_invalid_exam_date(self):
+        """3일 이내의 날짜에 예약을 시도"""
+        self.client.force_authenticate(user=self.company_user_1)
+        url = reverse('reservations')
+
+        valid_data = {
+            'exam_date': timezone.now().date() + timedelta(days=3),
+            'start_time': time(10, 0),
+            'end_time': time(12, 0),
+            'attendees': 10000,
+        }
+
+        response = self.client.post(url, valid_data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['detail'], '예약은 시험 시작 3일 전까지 신청 가능합니다.')
+
+    def test_post_reservation_with_invalid_exam_time(self):
+        """종료 시간이 시작 시간보다 앞선 경우 시도"""
+        self.client.force_authenticate(user=self.company_user_1)
+        url = reverse('reservations')
+
+        valid_data = {
+            'exam_date': timezone.now().date() + timedelta(days=5),
+            'start_time': time(10, 0),
+            'end_time': time(10, 0),
+            'attendees': 10000,
+        }
+
+        response = self.client.post(url, valid_data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['detail'], '종료 시간은 시작 시간보다 늦어야합니다.')
+
+    def test_post_reservation_with_invalid_attendees(self):
+        """신청 인원이 5만명을 넘은 경우 시도"""
+        self.client.force_authenticate(user=self.company_user_1)
+        url = reverse('reservations')
+
+        valid_data = {
+            'exam_date': timezone.now().date() + timedelta(days=5),
+            'start_time': time(10, 0),
+            'end_time': time(12, 0),
+            'attendees': 50001,
+        }
+
+        response = self.client.post(url, valid_data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['detail'], '동 시간대 최대 5만명 까지 예약할 수 있습니다.')
+
+    def test_post_reservation_with_already_confirmed_attendees(self):
+        """예약 시도 시간에 이미 일정 응시 인원이 있어 예약 불가능한 경우 시도"""
+        Reservation.objects.create(
+            company_customer=self.admin_user_1,
+            exam_date=timezone.now().date() + timedelta(days=5),
+            start_time=time(10, 0),
+            end_time=time(12, 0),
+            attendees=30000,
+            status="CONFIRMED"
+        )
+
+        Reservation.objects.create(
+            company_customer=self.admin_user_1,
+            exam_date=timezone.now().date() + timedelta(days=5),
+            start_time=time(13, 0),
+            end_time=time(15, 0),
+            attendees=30000,
+            status="CONFIRMED"
+        )
+
+        self.client.force_authenticate(user=self.company_user_1)
+        url = reverse('reservations')
+
+        valid_data = {
+            'exam_date': timezone.now().date() + timedelta(days=5),
+            'start_time': time(11, 0),
+            'end_time': time(14, 0),
+            'attendees': 30000,
+        }
+
+        response = self.client.post(url, valid_data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['detail'], '동 시간대 최대 5만명 까지 예약할 수 있습니다.')
