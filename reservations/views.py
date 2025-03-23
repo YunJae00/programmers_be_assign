@@ -146,3 +146,25 @@ class ReservationDetailView(GenericAPIView):
                 {"detail": "데이터베이스 처리 중 오류가 발생했습니다."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    def delete(self, request, reservation_id):
+        """
+        예약 삭제
+        - 어드민: 모든 예약 삭제 가능
+        - 기업 사용자: 확정 전의 자신의 예약 삭제 가능
+        """
+        manager = ReservationManager()
+
+        try:
+            reservation_qs = manager.retrieve_reservation_by_id(request.user, reservation_id)
+
+            manager.delete_reservation(request.user, reservation_qs)
+
+            return Response(
+                status=status.HTTP_204_NO_CONTENT
+            )
+        except DatabaseError as e:
+            return Response(
+                {"detail": "데이터베이스 처리 중 오류가 발생했습니다."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

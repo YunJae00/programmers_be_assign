@@ -549,3 +549,102 @@ class ReservationPatchTestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data['detail'], '동 시간대 최대 50000명 까지 예약할 수 있습니다. (현재 예약 가능 인원: 20000명)')
+
+
+class ReservationDeleteTestCase(APITestCase):
+    def setUp(self):
+        # 기업 사용자 1
+        self.company_user_1 = User.objects.create(
+            email='company_user_1@test.com',
+            password='testpassword',
+            name='company_user_1',
+            role='COMPANY',
+        )
+        # 기업 사용자 2
+        self.company_user_2 = User.objects.create(
+            email='company_user_2@test.com',
+            password='testpassword',
+            name='company_user_2',
+            role='COMPANY',
+        )
+        # 어드민
+        self.admin_user_1 = User.objects.create(
+            email='admin_user_1@test.com',
+            password='testpassword',
+            name='admin_user_1',
+            role='ADMIN',
+        )
+
+        # 기업 사용자 1의 예약
+        self.reservation_1 = Reservation.objects.create(
+            company_customer=self.company_user_1,
+            exam_date=timezone.now().date() + timedelta(days=5),
+            start_time=time(10, 0),
+            end_time=time(12, 0),
+            attendees=30000,
+        )
+        # 기업 사용자 2의 예약 (확정된 예약)
+        self.reservation_2 = Reservation.objects.create(
+            company_customer=self.company_user_2,
+            exam_date=timezone.now().date() + timedelta(days=5),
+            start_time=time(13, 0),
+            end_time=time(15, 0),
+            attendees=30000,
+            status='CONFIRMED'
+        )
+
+    def test_delete_reservation(self):
+        """기업 사용자가 자신의 예약을 삭제"""
+        self.client.force_authenticate(user=self.company_user_1)
+        url = reverse('reservation-detail', args=[self.reservation_1.id])
+
+        response = self.client.delete(url, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_delete_by_unauthorized_user(self):
+        """인증되지 않은 사용자의 예약 삭제 시도"""
+        url = reverse('reservation-detail', args=[self.reservation_1.id])
+
+        response = self.client.delete(url, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_delete_reservation_not_found(self):
+        """존재하지 않는 예약 삭제 시도"""
+        self.client.force_authenticate(user=self.company_user_1)
+        url = reverse('reservation-detail', args=[9999])
+
+        response = self.client.delete(url, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.data['detail'], '해당 예약을 찾을 수 없습니다.')
+
+    def test_delete_reservation_by_other_company_user(self):
+        """다른 기업 사용자의 예약을 삭제를 시도"""
+        self.client.force_authenticate(user=self.company_user_2)
+        url = reverse('reservation-detail', args=[self.reservation_1.id])
+
+        response = self.client.delete(url, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data['detail'], '해당 예약에 접근할 권한이 없습니다.')
+
+    def test_delete_confirmed_reservation_by_company_user(self):
+        """기업 사용자가 확정된 예약을 삭제를 시도"""
+        self.client.force_authenticate(user=self.company_user_2)
+        url = reverse('reservation-detail', args=[self.reservation_2.id])
+
+        response = self.client.delete(url, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['detail'], '확정된 예약은 삭제할 수 없습니다.')
+
+    def test_delete_confirmed_reservation_by_admin(self):
+        """어드민은 확정된 예약도 삭제 가능"""
+        self.client.force_authenticate(user=self.admin_user_1)
+        url = reverse('reservation-detail', args=[self.reservation_2.id])
+
+        response = self.client.delete(url, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)

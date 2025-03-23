@@ -1,11 +1,10 @@
-from datetime import timedelta, time
+from datetime import time
 
 from django.db import transaction
-from django.utils import timezone
 
-from reservations.constants import RESERVATION_MIN_DAYS_BEFORE, OPERATION_START_TIME, OPERATION_END_TIME, \
+from reservations.constants import OPERATION_START_TIME, OPERATION_END_TIME, \
     MAX_ATTENDEES_PER_TIMESLOT
-from reservations.exceptions import ReservationPeriodException, ReservationAttendeesException, \
+from reservations.exceptions import ReservationAttendeesException, \
     ReservationAccessDeniedException, ReservationNotFoundException, ConfirmedReservationModificationException
 from reservations.models import Reservation
 
@@ -250,3 +249,23 @@ class ReservationManager:
 
         # 시간대 정보 반환
         return time_slots
+
+    def delete_reservation(self, user, reservation):
+        """
+        사용자의 권한에 따라 예약을 삭제
+
+        Args:
+            reservation: 예약
+            user: 요청한 사용자
+
+        Returns:
+
+        Raises:
+            ConfirmedReservationModificationException:
+                기업 사용자가 확정된 예약 삭제를 시도하는 경우
+        """
+        # 기업 사용자가 확정된 예약을 삭제하려는 경우 예외 처리
+        if user.role == 'COMPANY' and reservation.status == 'CONFIRMED':
+            raise ConfirmedReservationModificationException("확정된 예약은 삭제할 수 없습니다.")
+
+        reservation.delete()
