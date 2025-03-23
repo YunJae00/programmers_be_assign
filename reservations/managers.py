@@ -1,11 +1,13 @@
-from datetime import time
+from datetime import time, datetime
 
 from django.db import transaction
+from django.utils import timezone
 
 from reservations.constants import OPERATION_START_TIME, OPERATION_END_TIME, \
     MAX_ATTENDEES_PER_TIMESLOT
 from reservations.exceptions import ReservationAttendeesException, \
-    ReservationAccessDeniedException, ReservationNotFoundException, ConfirmedReservationModificationException
+    ReservationAccessDeniedException, ReservationNotFoundException, ConfirmedReservationModificationException, \
+    InvalidDateException
 from reservations.models import Reservation
 
 
@@ -171,6 +173,58 @@ class ReservationManager:
 
         return reservation
 
+    @transaction.atomic
+    def delete_reservation(self, user, reservation):
+        """
+        사용자의 권한에 따라 예약을 삭제
+
+        Args:
+            reservation: 예약
+            user: 요청한 사용자
+
+        Returns:
+
+        Raises:
+            ConfirmedReservationModificationException:
+                기업 사용자가 확정된 예약 삭제를 시도하는 경우
+        """
+        # 기업 사용자가 확정된 예약을 삭제하려는 경우 예외 처리
+        if user.role == 'COMPANY' and reservation.status == 'CONFIRMED':
+            raise ConfirmedReservationModificationException("확정된 예약은 삭제할 수 없습니다.")
+
+        reservation.delete()
+
+    @transaction.atomic
+    def retrieve_available_times(self, date):
+        """
+        특정 날짜의 이용 가능한 시간대와 인원 정보 조회
+
+        Args:
+            date: 조회할 날짜
+
+        Returns:
+            시간대별 예약 가능 정보 리스트
+
+        Raises:
+            InvalidDateException:
+                - 날짜 정보가 없는 경우
+                - 날짜 형식이 올바르지 않은 경우
+                - 과거의 날짜 조회를 시도할 경우
+        """
+        if not date:
+            raise InvalidDateException('조회할 날짜를 지정해주세요.')
+
+        try:
+            date = datetime.strptime(date, '%Y-%m-%d').date()
+        except ValueError:
+            raise InvalidDateException(detail="날짜 형식이 올바르지 않습니다. YYYY-MM-DD 형식으로 입력해주세요.")
+
+        today = timezone.now().date()
+        if date < today:
+            raise InvalidDateException('과거 날짜에 대한 예약 정보는 조회할 수 없습니다.')
+
+        return self._get_available_slots(date)
+
     def _check_available_attendees(self, exam_date, start_time, end_time):
         """
         주어진 시간대에 예약 가능한 최대 인원 수를 계산
@@ -249,23 +303,3 @@ class ReservationManager:
 
         # 시간대 정보 반환
         return time_slots
-
-    def delete_reservation(self, user, reservation):
-        """
-        사용자의 권한에 따라 예약을 삭제
-
-        Args:
-            reservation: 예약
-            user: 요청한 사용자
-
-        Returns:
-
-        Raises:
-            ConfirmedReservationModificationException:
-                기업 사용자가 확정된 예약 삭제를 시도하는 경우
-        """
-        # 기업 사용자가 확정된 예약을 삭제하려는 경우 예외 처리
-        if user.role == 'COMPANY' and reservation.status == 'CONFIRMED':
-            raise ConfirmedReservationModificationException("확정된 예약은 삭제할 수 없습니다.")
-
-        reservation.delete()

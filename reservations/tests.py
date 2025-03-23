@@ -648,3 +648,91 @@ class ReservationDeleteTestCase(APITestCase):
         response = self.client.delete(url, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+
+class ReservationAvailableTimeGetTestCase(APITestCase):
+    def setUp(self):
+        # 기업 사용자 1
+        self.company_user_1 = User.objects.create(
+            email='company_user_1@test.com',
+            password='testpassword',
+            name='company_user_1',
+            role='COMPANY',
+        )
+        # 기업 사용자 1의 예약 (확정된 예약)
+        Reservation.objects.create(
+            company_customer=self.company_user_1,
+            exam_date=timezone.now().date() + timedelta(days=5),
+            start_time=time(10, 0),
+            end_time=time(12, 0),
+            attendees=30000,
+            status='CONFIRMED'
+        )
+        # 기업 사용자 2의 예약 (확정된 예약)
+        Reservation.objects.create(
+            company_customer=self.company_user_1,
+            exam_date=timezone.now().date() + timedelta(days=5),
+            start_time=time(13, 0),
+            end_time=time(15, 0),
+            attendees=40000,
+            status='CONFIRMED'
+        )
+
+    def test_get_available_times(self):
+        """기업 사용자가 5일 뒤 날짜의 예약 가능 시간 조회"""
+        self.client.force_authenticate(user=self.company_user_1)
+
+        # 5일 뒤 날짜 계산
+        test_date = (timezone.now().date() + timedelta(days=5)).strftime('%Y-%m-%d')
+        url = reverse('available-times') + f'?date={test_date}'
+
+        response = self.client.get(url, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data[0].get('start_time'), time(9, 0).isoformat())
+        self.assertEqual(response.data[0].get('available'), 50000)
+        self.assertEqual(response.data[1].get('available'), 20000)
+
+    def test_get_available_times_by_unauthorized_user(self):
+        """인증되지 않은 사용자의 조회 시도"""
+        # 3일 뒤 날짜 계산
+        test_date = (timezone.now().date() + timedelta(days=5)).strftime('%Y-%m-%d')
+        url = reverse('available-times') + f'?date={test_date}'
+
+        response = self.client.get(url, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_get_available_times_with_invalid_date(self):
+        """잘못된 날짜형식으로 조회 시도"""
+        self.client.force_authenticate(user=self.company_user_1)
+
+        invalid_date = "2025/03/25"  # 올바른 형식은 2025-03-25
+        url = reverse('available-times') + f'?date={invalid_date}'
+
+        response = self.client.get(url, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['detail'], '날짜 형식이 올바르지 않습니다. YYYY-MM-DD 형식으로 입력해주세요.')
+
+    def test_get_available_times_without_date(self):
+        """날짜 없이 조회 시도"""
+        self.client.force_authenticate(user=self.company_user_1)
+        url = reverse('available-times')
+
+        response = self.client.get(url, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['detail'], '조회할 날짜를 지정해주세요.')
+
+    def test_get_available_times_with_past_date(self):
+        """어제의 날짜의 예약 가능 시간 조회 시도"""
+        self.client.force_authenticate(user=self.company_user_1)
+
+        test_date = (timezone.now().date() - timedelta(days=1)).strftime('%Y-%m-%d')
+        url = reverse('available-times') + f'?date={test_date}'
+
+        response = self.client.get(url, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['detail'], '과거 날짜에 대한 예약 정보는 조회할 수 없습니다.')

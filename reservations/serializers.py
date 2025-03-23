@@ -50,3 +50,9 @@ class ReservationRequestSerializer(serializers.Serializer):
                 raise ReservationPeriodException(f'응시 인원은 1명에서 {MAX_ATTENDEES_PER_TIMESLOT}명 사이여야 합니다.')
 
         return data
+
+
+class ReservationAvailableTimeResponseSerializer(serializers.Serializer):
+    start_time = serializers.TimeField(read_only=True)
+    end_time = serializers.TimeField(read_only=True)
+    available = serializers.IntegerField(read_only=True)

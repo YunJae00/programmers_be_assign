@@ -7,7 +7,8 @@ from rest_framework.response import Response
 from programmers_exam_reservation.utils.paginations import CustomPagination
 from programmers_exam_reservation.utils.permissions import HasRolePermission
 from reservations.managers import ReservationManager
-from reservations.serializers import ReservationResponseSerializer, ReservationRequestSerializer
+from reservations.serializers import ReservationResponseSerializer, ReservationRequestSerializer, \
+    ReservationAvailableTimeResponseSerializer
 
 
 class ReservationListView(GenericAPIView):
@@ -162,6 +163,35 @@ class ReservationDetailView(GenericAPIView):
 
             return Response(
                 status=status.HTTP_204_NO_CONTENT
+            )
+        except DatabaseError as e:
+            return Response(
+                {"detail": "데이터베이스 처리 중 오류가 발생했습니다."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class AvailableTimeView(GenericAPIView):
+    serializer_class = ReservationAvailableTimeResponseSerializer
+
+    def get_permissions(self):
+        return [IsAuthenticated(), HasRolePermission(['COMPANY', 'ADMIN'])]
+
+    def get(self, request):
+        """
+        - 어드민, 기업 사용자: 예약 가능한 시간대 조회
+        """
+        manager = ReservationManager()
+
+        try:
+            date = request.query_params.get('date')
+            available_times = manager.retrieve_available_times(date)
+
+            response_serializer = self.serializer_class(available_times, many=True)
+
+            return Response(
+                data=response_serializer.data,
+                status=status.HTTP_200_OK
             )
         except DatabaseError as e:
             return Response(
