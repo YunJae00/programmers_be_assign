@@ -217,7 +217,7 @@ class ReservationCreateTestCase(APITestCase):
         response = self.client.post(url, valid_data, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['detail'], '동 시간대 최대 5만명 까지 예약할 수 있습니다.')
+        self.assertEqual(response.data['detail'], '응시 인원은 1명에서 50000명 사이여야 합니다.')
 
     def test_post_reservation_with_already_confirmed_attendees(self):
         """예약 시도 시간에 이미 일정 응시 인원이 있어 예약 불가능한 경우 시도"""
@@ -252,7 +252,7 @@ class ReservationCreateTestCase(APITestCase):
         response = self.client.post(url, valid_data, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['detail'], '동 시간대 최대 5만명 까지 예약할 수 있습니다.')
+        self.assertEqual(response.data['detail'], '동 시간대 최대 50000명 까지 예약할 수 있습니다. (현재 예약 가능 인원: 20000명)')
 
 
 class ReservationDetailGetTestCase(APITestCase):
@@ -409,8 +409,8 @@ class ReservationPatchTestCase(APITestCase):
 
         valid_data = {
             'exam_date': timezone.now().date() + timedelta(days=5),
-            'start_time': time(18, 0),
-            'end_time': time(20, 0),
+            'start_time': time(16, 0),
+            'end_time': time(18, 0),
             'attendees': 20000,
         }
 
@@ -430,8 +430,8 @@ class ReservationPatchTestCase(APITestCase):
 
         valid_data = {
             'exam_date': timezone.now().date() + timedelta(days=5),
-            'start_time': time(18, 0),
-            'end_time': time(20, 0),
+            'start_time': time(16, 0),
+            'end_time': time(18, 0),
             'attendees': 20000,
         }
 
@@ -446,8 +446,8 @@ class ReservationPatchTestCase(APITestCase):
 
         valid_data = {
             'exam_date': timezone.now().date() + timedelta(days=5),
-            'start_time': time(18, 0),
-            'end_time': time(20, 0),
+            'start_time': time(16, 0),
+            'end_time': time(18, 0),
             'attendees': 20000,
         }
 
@@ -462,8 +462,8 @@ class ReservationPatchTestCase(APITestCase):
 
         valid_data = {
             'exam_date': timezone.now().date() + timedelta(days=5),
-            'start_time': time(18, 0),
-            'end_time': time(20, 0),
+            'start_time': time(16, 0),
+            'end_time': time(18, 0),
             'attendees': 20000,
         }
 
@@ -542,10 +542,10 @@ class ReservationPatchTestCase(APITestCase):
             'exam_date': timezone.now().date() + timedelta(days=5),
             'start_time': time(11, 0),
             'end_time': time(16, 0),
-            'attendees': 20000,
+            'attendees': 20001,
         }
 
         response = self.client.patch(url, invalid_data, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['detail'], '동 시간대 최대 5만명 까지 예약할 수 있습니다.')
+        self.assertEqual(response.data['detail'], '동 시간대 최대 50000명 까지 예약할 수 있습니다. (현재 예약 가능 인원: 20000명)')

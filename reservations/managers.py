@@ -47,27 +47,13 @@ class ReservationManager:
             reservation: 생성된 예약 객체
 
         Raises:
-            ReservationPeriodException:
-                - 예약일이 시험 시작 3일 이내인 경우
-                - 종료 시간이 시작 시작보다 앞서거나 같은 경우
-            ReservationAttendeesException: 예약 시도 인원이 5만명을 초과하는 경우
+            ReservationAttendeesException: 예약 시도 인원이 예약 가능 인원을 초과하는 경우
         """
-
-        if exam_date <= timezone.now().date() + timedelta(days=RESERVATION_MIN_DAYS_BEFORE):
-            raise ReservationPeriodException(f'예약은 시험 시작 {RESERVATION_MIN_DAYS_BEFORE}일 전까지 신청 가능합니다.')
-
-        if start_time < OPERATION_START_TIME or end_time > OPERATION_END_TIME:
-            raise ReservationPeriodException(f'예약은 영업 시간({OPERATION_START_TIME.isoformat()}~{OPERATION_END_TIME.isoformat()}) 내에만 가능합니다.')
-
-        if start_time >= end_time:
-            raise ReservationPeriodException('종료 시간은 시작 시간보다 늦어야합니다.')
-
         # 시험 날짜, 시작 시간, 종료 시간에 예약 가능한 최대 응시 인원
         available_attendees = self._check_available_attendees(exam_date, start_time, end_time)
 
         if attendees > available_attendees:
-            # 커스텀 예외 처리
-            raise ReservationAttendeesException(f'동 시간대 최대 {MAX_ATTENDEES_PER_TIMESLOT}명 까지 예약할 수 있습니다.')
+            raise ReservationAttendeesException(f'동 시간대 최대 {MAX_ATTENDEES_PER_TIMESLOT}명 까지 예약할 수 있습니다. (현재 예약 가능 인원: {available_attendees}명)')
 
         reservation = Reservation.objects.create(
             company_customer=user,
@@ -128,10 +114,7 @@ class ReservationManager:
             ConfirmedReservationModificationException:
                 기업 사용자가 확정된 예약 수정을 시도하는 경우
             ReservationAccessDeniedException:
-                어드민 사용자가 아닌 다른 사용자가 status를 수정 시도할 경우
-            ReservationPeriodException:
-                - 예약일이 시험 시작 3일 이내인 경우
-                - 종료 시간이 시작 시간보다 앞서거나 같은 경우
+                어드민이 아닌 다른 사용자가 status를 수정 시도할 경우
             ReservationAttendeesException:
                 해당 시간 응시 인원이 5만명을 넘어갈 경우
         """
@@ -144,8 +127,6 @@ class ReservationManager:
 
         # 시험 날짜 수정
         if exam_date is not None:
-            if exam_date <= timezone.now().date() + timedelta(days=RESERVATION_MIN_DAYS_BEFORE):
-                raise ReservationPeriodException(f'예약은 시험 시작 {RESERVATION_MIN_DAYS_BEFORE}일 전까지 신청 가능합니다.')
             reservation.exam_date = exam_date
             modified = True
 
@@ -157,13 +138,6 @@ class ReservationManager:
         if end_time is not None:
             reservation.end_time = end_time
             modified = True
-
-        if start_time < OPERATION_START_TIME or end_time > OPERATION_END_TIME:
-            raise ReservationPeriodException(f'예약은 영업 시간({OPERATION_START_TIME.isoformat()}~{OPERATION_END_TIME.isoformat()}) 내에만 가능합니다.')
-
-        # 시작/종료 시간 비교 검증
-        if reservation.start_time >= reservation.end_time:
-            raise ReservationPeriodException('종료 시간은 시작 시간보다 늦어야합니다.')
 
         # 응시 인원 수정
         if attendees is not None:
@@ -191,7 +165,7 @@ class ReservationManager:
             available_attendees = self._check_available_attendees(check_exam_date, check_start_time, check_end_time)
 
             if check_attendees > available_attendees:
-                raise ReservationAttendeesException(f'동 시간대 최대 {MAX_ATTENDEES_PER_TIMESLOT}명 까지 예약할 수 있습니다.')
+                raise ReservationAttendeesException(f'동 시간대 최대 {MAX_ATTENDEES_PER_TIMESLOT}명 까지 예약할 수 있습니다. (현재 예약 가능 인원: {available_attendees}명)')
 
         if modified is True:
             reservation.save()
@@ -270,7 +244,7 @@ class ReservationManager:
 
             # 예약이 영향을 미치는 모든 슬롯 업데이트
             for slot in time_slots:
-                if (res_start < slot['end_time'] and res_end > slot['start_time']):
+                if res_start < slot['end_time'] and res_end > slot['start_time']:
                     # 해당 슬롯에 예약된 인원만큼 가용 인원 감소
                     slot['available'] -= res_attendees
 
