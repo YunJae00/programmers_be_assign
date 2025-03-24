@@ -202,6 +202,40 @@ class ReservationCreateTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data['detail'], '종료 시간은 시작 시간보다 늦어야합니다.')
 
+    def test_post_reservation_with_invalid_exam_time_before_business_hour(self):
+        """시작 시간이 영업시간 이전인 경우 시도"""
+        self.client.force_authenticate(user=self.company_user_1)
+        url = reverse('reservations')
+
+        valid_data = {
+            'exam_date': timezone.now().date() + timedelta(days=5),
+            'start_time': time(8, 0),
+            'end_time': time(10, 0),
+            'attendees': 10000,
+        }
+
+        response = self.client.post(url, valid_data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['detail'], '시작 시간은 영업 시작 시간(09:00:00) 이후여야 합니다.')
+
+    def test_post_reservation_with_invalid_exam_time_after_business_hour(self):
+        """종료 시간이 영업시간 이후인 경우 시도"""
+        self.client.force_authenticate(user=self.company_user_1)
+        url = reverse('reservations')
+
+        valid_data = {
+            'exam_date': timezone.now().date() + timedelta(days=5),
+            'start_time': time(16, 0),
+            'end_time': time(20, 0),
+            'attendees': 10000,
+        }
+
+        response = self.client.post(url, valid_data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['detail'], '종료 시간은 영업 종료 시간(18:00:00) 이전이어야 합니다.')
+
     def test_post_reservation_with_invalid_attendees(self):
         """신청 인원이 5만명을 넘은 경우 시도"""
         self.client.force_authenticate(user=self.company_user_1)
@@ -380,6 +414,15 @@ class ReservationPatchTestCase(APITestCase):
             end_time=time(15, 0),
             attendees=30000,
         )
+        # 기업 사용자 1의 확정된 예약
+        self.reservation_3 = Reservation.objects.create(
+            company_customer=self.company_user_1,
+            exam_date=timezone.now().date() + timedelta(days=5),
+            start_time=time(16, 0),
+            end_time=time(18, 0),
+            attendees=30000,
+            status='CONFIRMED',
+        )
 
     def test_patch_reservation_by_company_user(self):
         """기업 사용자가 자신의 예약을 수정"""
@@ -515,6 +558,34 @@ class ReservationPatchTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data['detail'], '종료 시간은 시작 시간보다 늦어야합니다.')
 
+    def test_post_reservation_with_invalid_exam_time_before_business_hour(self):
+        """시작 시간이 영업시간 이전인 경우 시도"""
+        self.client.force_authenticate(user=self.company_user_1)
+        url = reverse('reservation-detail', args=[self.reservation_1.id])
+
+        valid_data = {
+            'start_time': time(8, 0),
+        }
+
+        response = self.client.patch(url, valid_data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['detail'], '시작 시간은 영업 시작 시간(09:00:00) 이후여야 합니다.')
+
+    def test_patch_reservation_with_invalid_exam_time_after_business_hour(self):
+        """종료 시간이 영업시간 이후인 경우 시도"""
+        self.client.force_authenticate(user=self.company_user_1)
+        url = reverse('reservation-detail', args=[self.reservation_1.id])
+
+        valid_data = {
+            'end_time': time(20, 0),
+        }
+
+        response = self.client.patch(url, valid_data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['detail'], '종료 시간은 영업 종료 시간(18:00:00) 이전이어야 합니다.')
+
     def test_patch_reservation_with_invalid_attendees(self):
         """해당 시간 응시 인원이 5만명을 넘어갈 경우"""
         Reservation.objects.create(
@@ -549,6 +620,23 @@ class ReservationPatchTestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data['detail'], '동 시간대 최대 50000명 까지 예약할 수 있습니다. (현재 예약 가능 인원: 20000명)')
+
+    def test_patch_confirmed_reservation(self):
+        """확정된 예약을 수정 시도"""
+        self.client.force_authenticate(user=self.company_user_1)
+        url = reverse('reservation-detail', args=[self.reservation_3.id])
+
+        valid_data = {
+            'exam_date': timezone.now().date() + timedelta(days=5),
+            'start_time': time(16, 0),
+            'end_time': time(18, 0),
+            'attendees': 20000,
+        }
+
+        response = self.client.patch(url, valid_data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['detail'], '확정된 예약은 수정할 수 없습니다.')
 
 
 class ReservationDeleteTestCase(APITestCase):
