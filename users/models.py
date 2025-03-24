@@ -1,8 +1,12 @@
+from datetime import datetime
+
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
 from django.db import models
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from users.choices import ROLE_CHOICES
+from users.exceptions import InvalidSignInInfo, InvalidCredentials
 
 
 class UserManager(BaseUserManager):
@@ -19,6 +23,26 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         return self.create_user(email, password, **extra_fields)
+
+    def get_tokens_for_user(self, email, password):
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            raise InvalidSignInInfo()
+
+        if user.check_password(password):
+            refresh = RefreshToken.for_user(user)
+        else:
+            raise InvalidCredentials()
+
+        exp = datetime.fromtimestamp(refresh.access_token.payload.get("exp"))
+
+        return user, {
+            "id": user.id,
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+            "exp": exp,
+        }
 
 
 class User(AbstractBaseUser, PermissionsMixin):
