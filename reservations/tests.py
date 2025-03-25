@@ -77,7 +77,7 @@ class ReservationGetTestCase(APITestCase):
         url = reverse('reservations')
         response = self.client.get(url)
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_get_reservations_by_wrong_role_user(self):
         """잘못된 역할을 가진 사용자의 예약 조회 시도"""
@@ -149,7 +149,7 @@ class ReservationCreateTestCase(APITestCase):
 
         response = self.client.post(url, valid_data, format='json')
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_create_reservation_by_wrong_role_user(self):
         """기업 사용자가 아닌 사용자가 예약 생성 시도"""
@@ -351,7 +351,7 @@ class ReservationDetailGetTestCase(APITestCase):
 
         response = self.client.get(url, format='json')
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_get_reservation_by_other_user(self):
         """기업 사용자 1의 예약을 기업 사용자 2가 조회 시도"""
@@ -496,7 +496,7 @@ class ReservationPatchTestCase(APITestCase):
 
         response = self.client.patch(url, valid_data, format='json')
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_patch_reservation_not_found(self):
         """"기업 사용자가 존재하지 않는 예약을 수정 시도"""
@@ -696,7 +696,7 @@ class ReservationDeleteTestCase(APITestCase):
 
         response = self.client.delete(url, format='json')
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_delete_reservation_not_found(self):
         """존재하지 않는 예약 삭제 시도"""
@@ -789,7 +789,7 @@ class ReservationAvailableTimeGetTestCase(APITestCase):
 
         response = self.client.get(url, format='json')
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_get_available_times_with_invalid_date(self):
         """잘못된 날짜형식으로 조회 시도"""
