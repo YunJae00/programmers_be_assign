@@ -12,7 +12,6 @@ from reservations.models import Reservation
 
 
 class ReservationManager:
-    @transaction.atomic
     def retrieve_reservations_by_user(self, user):
         """
         사용자의 권한에 따라 예약 조회
@@ -67,7 +66,6 @@ class ReservationManager:
 
         return reservation
 
-    @transaction.atomic
     def retrieve_reservation_by_id(self, user, reservation_id):
         """
         ID로 예약 조회
