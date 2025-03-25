@@ -10,13 +10,24 @@ from users.exceptions import InvalidSignInInfo, InvalidCredentials
 
 
 class UserManager(BaseUserManager):
-    def create_user(self, email, password=None, **extra_fields):
+
+    def create_user(self, email, password, name):
         if not email:
             raise ValueError('이메일은 필수입니다')
+
         email = self.normalize_email(email)
-        user = self.model(email=email, **extra_fields)
+        user = User.objects.create(
+            email=email,
+            name=name,
+            role='COMPANY'
+        )
+
+        if not password:
+            raise ValueError('비밀번호는 필수입니다')
+
         user.set_password(password)
         user.save(using=self._db)
+
         return user
 
     def create_superuser(self, email, password=None, **extra_fields):
