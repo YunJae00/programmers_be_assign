@@ -1,3 +1,5 @@
+import logging
+
 from django.db import DatabaseError
 from rest_framework import status
 from rest_framework.generics import GenericAPIView
@@ -9,6 +11,8 @@ from programmers_exam_reservation.utils.permissions import HasRolePermission
 from reservations.managers import ReservationManager
 from reservations.serializers import ReservationResponseSerializer, ReservationRequestSerializer, \
     ReservationAvailableTimeResponseSerializer
+
+logger = logging.getLogger('django')
 
 
 class ReservationListView(GenericAPIView):
@@ -46,6 +50,12 @@ class ReservationListView(GenericAPIView):
                 {"detail": "데이터베이스 처리 중 오류가 발생했습니다."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        except Exception as e:
+            logger.error(f"예약 목록 조회 실패: {str(e)}", exc_info=True)
+            return Response(
+                {"detail": "서버 처리 중 오류가 발생했습니다."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def post(self, request):
         """
@@ -75,6 +85,12 @@ class ReservationListView(GenericAPIView):
         except DatabaseError as e:
             return Response(
                 {"detail": "데이터베이스 처리 중 오류가 발생했습니다."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        except Exception as e:
+            logger.error(f"예약 생성 실패: {str(e)}", exc_info=True)
+            return Response(
+                {"detail": "서버 처리 중 오류가 발생했습니다."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -109,6 +125,12 @@ class ReservationDetailView(GenericAPIView):
         except DatabaseError as e:
             return Response(
                 {"detail": "데이터베이스 처리 중 오류가 발생했습니다."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        except Exception as e:
+            logger.error(f"예약 상세 조회 실패: {str(e)}", exc_info=True)
+            return Response(
+                {"detail": "서버 처리 중 오류가 발생했습니다."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -147,6 +169,12 @@ class ReservationDetailView(GenericAPIView):
                 {"detail": "데이터베이스 처리 중 오류가 발생했습니다."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        except Exception as e:
+            logger.error(f"예약 수정 실패: {str(e)}", exc_info=True)
+            return Response(
+                {"detail": "서버 처리 중 오류가 발생했습니다."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def delete(self, request, reservation_id):
         """
@@ -167,6 +195,12 @@ class ReservationDetailView(GenericAPIView):
         except DatabaseError as e:
             return Response(
                 {"detail": "데이터베이스 처리 중 오류가 발생했습니다."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        except Exception as e:
+            logger.error(f"예약 삭제 실패: {str(e)}", exc_info=True)
+            return Response(
+                {"detail": "서버 처리 중 오류가 발생했습니다."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -196,5 +230,11 @@ class AvailableTimeView(GenericAPIView):
         except DatabaseError as e:
             return Response(
                 {"detail": "데이터베이스 처리 중 오류가 발생했습니다."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        except Exception as e:
+            logger.error(f"예약 가능 시간대 조회 실패: {str(e)}", exc_info=True)
+            return Response(
+                {"detail": "서버 처리 중 오류가 발생했습니다."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
